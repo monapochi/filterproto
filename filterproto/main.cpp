@@ -38,73 +38,80 @@ Mat sepConv(Mat input, int radius)
     
 }
 
-/** @function main */
-int main( int argc, char** argv )
+
+Mat filter(Mat src, int median_param, int k, int line_param)
 {
-    Mat src, src_gray, blurred, dst;
+    //
+    Mat src_gray, blurred, dst, res;
     int kernel_size = 3;
     int scale = 1;
     int delta = 0;
     int ddepth = CV_16S;
-    const char* window_name = "Laplace Demo";
-    
-    /// Load an image
-    //src = imread( argv[1] );
-    //src = imread("/Users/naoishinichirou/Downloads/royal_ascot_horses.jpg");
-    src = imread("/Users/naoishinichirou/Downloads/california_t.jpeg");
 
-    if( !src.data ) return -1;
+    if( !src.data ) return res;
     
+    if (src.cols > 512) {
+        float h, w, nw, nh;
+        h = src.rows;
+        w = src.cols;
+        nw = 512;
+        nh = (h/w)*nw; // Maintain aspect ratio based on a desired width.
+
+        resize(src, src, Size(nw,nh),INTER_AREA);
+    }
     
     // 1.
     /// Remove noise by blurring with a Gaussian filter
     //GaussianBlur( src, blurred, Size(3,3), 0, 0, BORDER_DEFAULT );
     //bilateralFilter(src, blurred, 20, 90, 40);
     //bilateralFilter(src, blurred, 11, 40, 200);
-
+    
     bilateralFilter(src, blurred, 11, 40, 200);
     bilateralFilter(blurred, dst, 11, 40, 200);
     bilateralFilter(dst, blurred, 11, 40, 200);
     bilateralFilter(blurred, dst, 11, 40, 200);
     bilateralFilter(dst, blurred, 11, 40, 200);
     //bilateralFilter(blurred, dst, 11, 40, 200);
-
+    
     
     cvtColor( src, src_gray, CV_RGB2GRAY );
     Mat dog = sepConv(src_gray, 1) - sepConv(src_gray, 4);
     cvtColor( dog, dog, CV_GRAY2RGB );
     
     
-
-//    Mat gaussian;
-//    GaussianBlur( src, gaussian, Size(3,3), 0, 0, BORDER_DEFAULT );
-//    /// Convert the image to grayscale
-//    cvtColor( gaussian, src_gray, CV_RGB2GRAY );
+    
+    //    Mat gaussian;
+    //    GaussianBlur( src, gaussian, Size(3,3), 0, 0, BORDER_DEFAULT );
+    //    /// Convert the image to grayscale
+    //    cvtColor( gaussian, src_gray, CV_RGB2GRAY );
     
     
-//    /// Apply Laplace function
-//    Mat abs_dst;
-//    
-//    Laplacian( src_gray, dst, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
-//    convertScaleAbs( dst, abs_dst );
-//    
-//    
-//    cvtColor( abs_dst, dst, CV_GRAY2RGB );
+    //    /// Apply Laplace function
+    //    Mat abs_dst;
+    //
+    //    Laplacian( src_gray, dst, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+    //    convertScaleAbs( dst, abs_dst );
+    //
+    //
+    //    cvtColor( abs_dst, dst, CV_GRAY2RGB );
     
     // 2.
     Mat median;
-    medianBlur(blurred, median, 31);
+    medianBlur(blurred, median, median_param); // 32 for testing
 
+    
     // 3.
     Mat reshaped_image = blurred.reshape(1, blurred.cols * blurred.rows);
     Mat reshaped_image32f;
     reshaped_image.convertTo(reshaped_image32f, CV_32FC1, 1.0 / 255.0);
     
+    
     Mat labels;
-    int cluster_number = 5;
+    int cluster_number = k; // 5 for testing
     TermCriteria criteria {TermCriteria::COUNT, 100, 1};
     Mat centers;
-    kmeans(reshaped_image32f, cluster_number, labels, criteria, 1, KMEANS_RANDOM_CENTERS, centers);
+    //kmeans(reshaped_image32f, cluster_number, labels, criteria, 1, KMEANS_RANDOM_CENTERS, centers);
+    kmeans(reshaped_image32f, cluster_number, labels, criteria, 1, KMEANS_PP_CENTERS, centers);
     
     Mat rgb_image(src.rows, src.cols, CV_8UC3);
     MatIterator_<Vec3b> rgb_first = rgb_image.begin<Vec3b>();
@@ -127,22 +134,268 @@ int main( int argc, char** argv )
     Laplacian( rgb_image, tmp, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
     convertScaleAbs( tmp, laplacian );
     rgb_image = rgb_image * 0.9 - laplacian * 0.1;
+    
+    
+    // edge darken for median
+    Laplacian( median, tmp, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+    convertScaleAbs( tmp, laplacian );
+    median = median - sepConv(laplacian, 3);
+    
+    //    Mat dog = sepConv(blurred, 1) - sepConv(blurred, 4);
+    //    imshow( "DoG", dog );
+    
+    res = median * 0.5 + rgb_image * 0.7;
+    res -= dog * line_param; // 2 for testing
 
+    
+    return res;
+}
+
+//
+Mat filter2(Mat src, int median_param, int k, int line_param)
+{
+    //
+    Mat src_gray, blurred, dst, res;
+    int kernel_size = 3;
+    int scale = 1;
+    int delta = 0;
+    int ddepth = CV_16S;
+    float h, w, nw, nh;
+    h = src.rows;
+    w = src.cols;
+    nw = 32;
+    nh = (h/w)*nw; // Maintain aspect ratio based on a desired width.
+
+    if( !src.data ) return res;
+
+
+    // 1. Difference of Gaussians
+    cvtColor( src, src_gray, CV_RGB2GRAY );
+    Mat dog = sepConv(src_gray, 2) - sepConv(src_gray, 4);
+    cvtColor( dog, dog, CV_GRAY2RGB );
+
+    
+    
+    // 2.
+    //bilateralFilter(src, blurred, 11, 80, 800);
+    Mat temp(nh, nw, src.type());
+    Mat median;
+    resize(src, temp, temp.size(),INTER_AREA);
+    resize(temp, median, src.size(),INTER_NEAREST);
+    
+    medianBlur(median, median, median_param); // 32 for testing
+    bilateralFilter(src, blurred, 11, 80, 800);
+    imshow("test", blurred);
+    
+    // edge darken
+    Mat laplacian,tmp;
+    Laplacian( blurred, tmp, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+    convertScaleAbs( tmp, laplacian );
+    blurred = blurred * 0.9 - laplacian * 0.1;
+    
     
     // edge darken for median
     Laplacian( median, tmp, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
     convertScaleAbs( tmp, laplacian );
     median = median - sepConv(laplacian, 3);
 
-//    Mat dog = sepConv(blurred, 1) - sepConv(blurred, 4);
-//    imshow( "DoG", dog );
     
-    Mat res = median * 0.5 + rgb_image * 0.7;
-    res -= dog * 2;
-    imshow( window_name, res );
+    //    Mat dog = sepConv(blurred, 1) - sepConv(blurred, 4);
+    //    imshow( "DoG", dog );
+    
+    res = median;
+    res -= dog * line_param; // 2 for testing
+    
+    
+    return res;
+}
+
+Mat filter3(Mat src, int median_param, int k, int line_param)
+{
+    //
+    Mat src_gray, blurred, dst, res;
+    int kernel_size = 3;
+    int scale = 1;
+    int delta = 0;
+    int ddepth = CV_16S;
+    
+    if( !src.data ) return res;
+    
+    if (src.cols > 512) {
+        float h, w, nw, nh;
+        h = src.rows;
+        w = src.cols;
+        nw = 512;
+        nh = (h/w)*nw; // Maintain aspect ratio based on a desired width.
+        
+        resize(src, src, Size(nw,nh),INTER_AREA);
+    }
+    
+    // 1.
+    /// Remove noise by blurring with a Gaussian filter
+    //GaussianBlur( src, blurred, Size(3,3), 0, 0, BORDER_DEFAULT );
+    //bilateralFilter(src, blurred, 20, 90, 40);
+    //bilateralFilter(src, blurred, 11, 40, 200);
+    
+    bilateralFilter(src, blurred, 11, 40, 200);
+    bilateralFilter(blurred, dst, 11, 40, 200);
+    bilateralFilter(dst, blurred, 11, 40, 200);
+    bilateralFilter(blurred, dst, 11, 40, 200);
+    bilateralFilter(dst, blurred, 11, 40, 200);
+    //bilateralFilter(blurred, dst, 11, 40, 200);
+    
+    
+    cvtColor( src, src_gray, CV_RGB2GRAY );
+    
+    
+    // 14th,Feb,2014
+    Mat tozero_img;
+    //boxFilter(src, tozero_img, src.type(), Size(2,2), Point(-1,-1), false);
+
+    //threshold(src_gray, tozero_img, 0, 255, cv::THRESH_TOZERO|cv::THRESH_OTSU);
+
+    Mat dog = sepConv(src_gray, 1) - sepConv(src_gray, 4);
+    dog=~dog;
+    dog = src_gray -dog;
+    cvtColor( dog, dog, CV_GRAY2RGB );
+    
+
 
     
+    Mat lap, temp_line;
+    cvtColor( blurred, temp_line, CV_RGB2GRAY );
+    Laplacian( temp_line, lap, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+    convertScaleAbs( lap, dog );
+    dog=~dog;
+    dog = temp_line -dog;
+    cvtColor( dog, dog, CV_GRAY2RGB );
+
+
+//    GaussianBlur( src, gauss, Size(3,3), 0, 0, BORDER_DEFAULT );
+//    Laplacian( gauss, gauss, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+//    convertScaleAbs( gauss, gauss );
     
+    
+
+    //cvtColor( lap, lap, CV_GRAY2RGB );
+    
+    //    Mat gaussian;
+    //    GaussianBlur( src, gaussian, Size(3,3), 0, 0, BORDER_DEFAULT );
+    //    /// Convert the image to grayscale
+    //    cvtColor( gaussian, src_gray, CV_RGB2GRAY );
+    
+    
+    //    /// Apply Laplace function
+    //    Mat abs_dst;
+    //
+    //    Laplacian( src_gray, dst, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+    //    convertScaleAbs( dst, abs_dst );
+    //
+    //
+    //    cvtColor( abs_dst, dst, CV_GRAY2RGB );
+    
+    // 2.
+    Mat median;
+    medianBlur(blurred, median, median_param); // 32 for testing
+    
+    
+    // 3.
+    Mat reshaped_image = blurred.reshape(1, blurred.cols * blurred.rows);
+    Mat reshaped_image32f;
+    reshaped_image.convertTo(reshaped_image32f, CV_32FC1, 1.0 / 255.0);
+    
+    
+    Mat labels;
+    int cluster_number = k; // 5 for testing
+    TermCriteria criteria {TermCriteria::COUNT, 100, 1};
+    Mat centers;
+    //kmeans(reshaped_image32f, cluster_number, labels, criteria, 1, KMEANS_RANDOM_CENTERS, centers);
+    kmeans(reshaped_image32f, cluster_number, labels, criteria, 1, KMEANS_PP_CENTERS, centers);
+    
+    Mat rgb_image(src.rows, src.cols, CV_8UC3);
+    MatIterator_<Vec3b> rgb_first = rgb_image.begin<Vec3b>();
+    MatIterator_<Vec3b> rgb_last = rgb_image.end<Vec3b>();
+    MatConstIterator_<int> label_first = labels.begin<int>();
+    
+    Mat centers_u8;
+    centers.convertTo(centers_u8, CV_8UC1, 255.0);
+    Mat centers_u8c3 = centers_u8.reshape(3);
+    
+    while ( rgb_first != rgb_last ) {
+        const Vec3b& rgb = centers_u8c3.ptr<Vec3b>(*label_first)[0];
+        *rgb_first = rgb;
+        ++rgb_first;
+        ++label_first;
+    }
+    
+    // edge darken
+    Mat laplacian,tmp;
+    Laplacian( rgb_image, tmp, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+    convertScaleAbs( tmp, laplacian );
+    rgb_image = rgb_image * 0.9 - laplacian * 0.1;
+    
+    
+    // edge darken for median
+    Laplacian( median, tmp, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+    convertScaleAbs( tmp, laplacian );
+    median = median - sepConv(laplacian, 3);
+    
+    //    Mat dog = sepConv(blurred, 1) - sepConv(blurred, 4);
+    //    imshow( "DoG", dog );
+    
+    res = median * 0.5 + rgb_image * 0.7;
+    imshow( "no line", res);
+
+    res -= dog * line_param; // 2 for testing
+    
+    Mat res_comp = median * 0.5 + rgb_image * 0.7;
+    //imshow( "test2", res_comp);
+
+    imshow( "test1", res);
+
+    return res;
+}
+
+
+/** @function main */
+int main( int argc, char** argv )
+{
+/*
+    VideoCapture cap(0); // デフォルトカメラをオープン
+    if(!cap.isOpened())  // 成功したかどうかをチェック
+    return -1;
+    
+    cap.set(CV_CAP_PROP_FRAME_WIDTH, 160);
+    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 120);
+    
+    Mat input_image;
+    namedWindow("cam",1);
+    for(;;)
+    {
+        cv::Mat frame;
+        cap >> frame; // カメラから新しいフレームを取得
+        input_image=frame;      //matのコピーは普通に=で結べば良いみたい．
+        imshow("cam", filter(input_image, 11, 9, 3));
+        if(waitKey(30) >= 0) break;
+    }
+ */
+
+    const char* window_name = "Laplace Demo";
+    
+    /// Load an image
+    //src = imread( argv[1] );
+    //src = imread("/Users/naoishinichirou/Downloads/royal_ascot_horses.jpg");
+    //Mat src = imread("/Users/naoishinichirou/Downloads/california_t.jpeg");
+    //Mat src = imread("/Users/naoishinichirou/Downloads/py_cat.jpg");
+    //Mat src = imread("/Users/naoishinichirou/Downloads/lenna.png");
+    //Mat src = imread("/Users/naoishinichirou/Downloads/sundown-paris.jpg");
+    //Mat src = imread("/Users/naoishinichirou/Downloads/py_k5ii_03.jpg");
+    Mat src = imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg");
+
+    //imshow( window_name, filter(src, 31, 5, 2));
+    //imshow( "filter2", filter2(src, 31, 5, 2));
+    //filter2(src, 31, 5, 2);
+    //filter3(src, 31, 5, 2);
     
     /// Show what you got
     //imshow( window_name, dst );
