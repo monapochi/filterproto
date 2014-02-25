@@ -39,10 +39,10 @@ Mat sepConv(Mat input, int radius)
 }
 
 
-Mat filter(Mat src, int median_param, int k, int line_param)
+Mat filter(Mat src, int median_param, int k, int lineParam, bool flagLine, bool flagResize)
 {
     //
-    Mat src_gray, blurred, dst, res;
+    Mat src_gray, blurred, dst, res, dog;
     int kernel_size = 3;
     int scale = 1;
     int delta = 0;
@@ -50,14 +50,17 @@ Mat filter(Mat src, int median_param, int k, int line_param)
 
     if( !src.data ) return res;
     
-    if (src.cols > 512) {
-        float h, w, nw, nh;
-        h = src.rows;
-        w = src.cols;
-        nw = 512;
-        nh = (h/w)*nw; // Maintain aspect ratio based on a desired width.
-
-        resize(src, src, Size(nw,nh),INTER_AREA);
+    if(flagResize)
+    {
+        if (src.cols > 512) {
+            float h, w, nw, nh;
+            h = src.rows;
+            w = src.cols;
+            nw = 512;
+            nh = (h/w)*nw; // Maintain aspect ratio based on a desired width.
+            
+            resize(src, src, Size(nw,nh),INTER_AREA);
+        }
     }
     
     // 1.
@@ -73,10 +76,12 @@ Mat filter(Mat src, int median_param, int k, int line_param)
     bilateralFilter(dst, blurred, 11, 40, 200);
     //bilateralFilter(blurred, dst, 11, 40, 200);
     
-    
-    cvtColor( src, src_gray, CV_RGB2GRAY );
-    Mat dog = sepConv(src_gray, 1) - sepConv(src_gray, 4);
-    cvtColor( dog, dog, CV_GRAY2RGB );
+    if(flagLine)
+    {
+        cvtColor( src, src_gray, CV_RGB2GRAY );
+        dog = sepConv(src_gray, 1) - sepConv(src_gray, 4);
+        cvtColor( dog, dog, CV_GRAY2RGB );
+    }
     
     
     
@@ -145,7 +150,8 @@ Mat filter(Mat src, int median_param, int k, int line_param)
     //    imshow( "DoG", dog );
     
     res = median * 0.5 + rgb_image * 0.7;
-    res -= dog * line_param; // 2 for testing
+    if(flagLine)
+      res -= dog * lineParam; // 2 for testing
 
     
     return res;
@@ -357,16 +363,68 @@ Mat filter3(Mat src, int median_param, int k, int line_param)
 }
 
 
+Mat dottize(Mat src, int width)
+{
+    Mat res, tmp;
+    
+    
+    
+    float h, w, nw, nh;
+    h = src.rows;
+    w = src.cols;
+    nw = width ? width :256;
+    nh = (h/w)*nw; // Maintain aspect ratio based on a desired width.
+    
+    resize(src, src, Size(nw,nh),INTER_AREA);
+    
+    
+    
+    Mat reshaped_image = src.reshape(1, src.cols * src.rows);
+    Mat reshaped_image32f;
+    reshaped_image.convertTo(reshaped_image32f, CV_32FC1, 1.0 / 255.0);
+    
+    
+    Mat labels;
+    int cluster_number = 16; // SFC palette color #
+    TermCriteria criteria {TermCriteria::COUNT, 100, 1};
+    Mat centers;
+    //kmeans(reshaped_image32f, cluster_number, labels, criteria, 1, KMEANS_RANDOM_CENTERS, centers);
+    kmeans(reshaped_image32f, cluster_number, labels, criteria, 1, KMEANS_PP_CENTERS, centers);
+    
+    Mat rgb_image(src.rows, src.cols, CV_8UC3);
+    MatIterator_<Vec3b> rgb_first = rgb_image.begin<Vec3b>();
+    MatIterator_<Vec3b> rgb_last = rgb_image.end<Vec3b>();
+    MatConstIterator_<int> label_first = labels.begin<int>();
+    
+    Mat centers_u8;
+    centers.convertTo(centers_u8, CV_8UC1, 255.0);
+    Mat centers_u8c3 = centers_u8.reshape(3);
+    
+    while ( rgb_first != rgb_last ) {
+        const Vec3b& rgb = centers_u8c3.ptr<Vec3b>(*label_first)[0];
+        *rgb_first = rgb;
+        ++rgb_first;
+        ++label_first;
+    }
+    
+    cvtColor(rgb_image, tmp, CV_RGB2BGR555);
+    cvtColor(tmp, res, CV_BGR5552RGB);
+
+    
+    return res;
+}
+
 /** @function main */
 int main( int argc, char** argv )
 {
-/*
+    /*
+
     VideoCapture cap(0); // デフォルトカメラをオープン
     if(!cap.isOpened())  // 成功したかどうかをチェック
     return -1;
     
-    cap.set(CV_CAP_PROP_FRAME_WIDTH, 160);
-    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 120);
+    cap.set(CV_CAP_PROP_FRAME_WIDTH, 640);
+    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
     
     Mat input_image;
     namedWindow("cam",1);
@@ -375,10 +433,11 @@ int main( int argc, char** argv )
         cv::Mat frame;
         cap >> frame; // カメラから新しいフレームを取得
         input_image=frame;      //matのコピーは普通に=で結べば良いみたい．
-        imshow("cam", filter(input_image, 11, 9, 3));
+        imshow("cam", filter(input_image, 11, 9, 3, true, true));
         if(waitKey(30) >= 0) break;
     }
- */
+ 
+     */
 
     const char* window_name = "Laplace Demo";
     
@@ -390,15 +449,23 @@ int main( int argc, char** argv )
     //Mat src = imread("/Users/naoishinichirou/Downloads/lenna.png");
     //Mat src = imread("/Users/naoishinichirou/Downloads/sundown-paris.jpg");
     //Mat src = imread("/Users/naoishinichirou/Downloads/py_k5ii_03.jpg");
-    Mat src = imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg");
+    //Mat src = imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg");
 
-    //imshow( window_name, filter(src, 31, 5, 2));
+    //imshow( window_name, filter(src, 31, 5, 2, true, false));
     //imshow( "filter2", filter2(src, 31, 5, 2));
     //filter2(src, 31, 5, 2);
     //filter3(src, 31, 5, 2);
     
-    /// Show what you got
-    //imshow( window_name, dst );
+    
+    //imshow( "test", filter(imread("/Users/naoishinichirou/Downloads/dcw_nishikawa_nara.jpg"), 31, 5, 2, false, true));
+    //imshow( "test", dottize(imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg")));
+    //imwrite("/Users/naoishinichirou/Downloads/output4.png", dottize(filter(imread("/Users/naoishinichirou/Downloads/py_k5ii_03.jpg"), 31, 5, 2, false, true)));
+    
+    imshow("test", dottize(filter(imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg"), 31, 5, 2, false, true), 256));
+    
+//    // 逆にしてみた -> イマイチ?
+//    imshow("test", filter(dottize(imread("/Users/naoishinichirou/Downloads/lenna.png")), 31, 5, 2, false, true));
+
     
     waitKey(0);
     
