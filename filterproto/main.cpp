@@ -38,6 +38,34 @@ Mat sepConv(Mat input, int radius)
     
 }
 
+Mat getDrawingLine(Mat src)
+{
+    Mat line;
+    
+    cvtColor( src, src, CV_RGB2GRAY );
+    line = sepConv(src, 1) - sepConv(src, 4);
+    
+    //adaptiveThreshold(line, line, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 7, 8);
+    //threshold(line, line, 0, 255, THRESH_BINARY|THRESH_OTSU);
+    
+    
+    int kernel_size = 3;
+    int scale = 1;
+    int delta = 0;
+    int ddepth = CV_16S;
+    Mat abs_dst,dst;
+    Laplacian( src, dst, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+    convertScaleAbs( dst, abs_dst );
+    abs_dst -= src;
+    line += abs_dst;
+    
+    cvtColor( line, line, CV_GRAY2RGB );
+
+    
+    
+    return line;
+}
+
 
 Mat filter(Mat src, int median_param, int k, int lineParam, bool flagLine, bool flagResize)
 {
@@ -77,11 +105,7 @@ Mat filter(Mat src, int median_param, int k, int lineParam, bool flagLine, bool 
     //bilateralFilter(blurred, dst, 11, 40, 200);
     
     if(flagLine)
-    {
-        cvtColor( src, src_gray, CV_RGB2GRAY );
-        dog = sepConv(src_gray, 1) - sepConv(src_gray, 4);
-        cvtColor( dog, dog, CV_GRAY2RGB );
-    }
+        dog = getDrawingLine(src);
     
     
     
@@ -417,27 +441,38 @@ Mat dottize(Mat src, int width)
 /** @function main */
 int main( int argc, char** argv )
 {
-    /*
 
+#if CAMERA
     VideoCapture cap(0); // デフォルトカメラをオープン
     if(!cap.isOpened())  // 成功したかどうかをチェック
     return -1;
     
-    cap.set(CV_CAP_PROP_FRAME_WIDTH, 640);
-    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 480);
+    cap.set(CV_CAP_PROP_FRAME_WIDTH, 320);
+    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 240);
     
+    Mat paint;
     Mat input_image;
     namedWindow("cam",1);
+    int count = 0;
     for(;;)
     {
         cv::Mat frame;
         cap >> frame; // カメラから新しいフレームを取得
         input_image=frame;      //matのコピーは普通に=で結べば良いみたい．
-        imshow("cam", filter(input_image, 11, 9, 3, true, true));
+        //imshow("cam", filter(input_image, 11, 9, 3, true, true));
+        //imshow("cam", ~getDrawingLine(input_image));
+        if(count < 1)
+        {
+            paint = filter(dottize(input_image, 160), 31, 5, 2, false, true);
+            resize(paint, paint, Size(320,240),INTER_NEAREST);
+        }
+        count++;
+        if(count > 2) count = 0;
+        Mat line = getDrawingLine(input_image);
+        imshow("cam", paint * 1.5 - line);
         if(waitKey(30) >= 0) break;
     }
- 
-     */
+#endif
 
     const char* window_name = "Laplace Demo";
     
@@ -461,11 +496,25 @@ int main( int argc, char** argv )
     //imshow( "test", dottize(imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg")));
     //imwrite("/Users/naoishinichirou/Downloads/output4.png", dottize(filter(imread("/Users/naoishinichirou/Downloads/py_k5ii_03.jpg"), 31, 5, 2, false, true)));
     
-    imshow("test", dottize(filter(imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg"), 31, 5, 2, false, true), 256));
+    //imshow("test", dottize(filter(imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg"), 31, 5, 2, false, true), 256));
     
 //    // 逆にしてみた -> イマイチ?
 //    imshow("test", filter(dottize(imread("/Users/naoishinichirou/Downloads/lenna.png")), 31, 5, 2, false, true));
 
+    /*
+    // 25th Feb 14
+    Mat src = imread("/Users/naoishinichirou/Downloads/sundown-paris.jpg");
+    Mat line = getDrawingLine(src);
+    Mat linedots = dottize(line, 256);
+    Mat paintdots = dottize(filter(src, 31, 5, 2, false, true), 256);
+    imshow("test", paintdots + linedots);
+     */
+    
+//    // 26th feb 14
+//    Mat src = imread("/Users/naoishinichirou/Downloads/sundown-paris.jpg");
+//    Mat line = getDrawingLine(src);
+//    imshow("test",line);
+    
     
     waitKey(0);
     
