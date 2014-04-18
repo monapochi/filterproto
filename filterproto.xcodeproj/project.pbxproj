@@ -34,6 +34,7 @@
 		2CF0D24618B31B59001F1BC5 /* libopencv_core.2.4.8.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libopencv_core.2.4.8.dylib; path = ../../../../opt/local/lib/libopencv_core.2.4.8.dylib; sourceTree = "<group>"; };
 		2CF0D24818B31B73001F1BC5 /* libopencv_highgui.2.4.8.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libopencv_highgui.2.4.8.dylib; path = ../../../../opt/local/lib/libopencv_highgui.2.4.8.dylib; sourceTree = "<group>"; };
 		2CF0D24A18B31B8A001F1BC5 /* libopencv_imgproc.2.4.8.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libopencv_imgproc.2.4.8.dylib; path = ../../../../opt/local/lib/libopencv_imgproc.2.4.8.dylib; sourceTree = "<group>"; };
+		2CF0D33A18BDF3BC001F1BC5 /* whitepaper.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; name = whitepaper.jpg; path = ../whitepaper.jpg; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +73,7 @@
 		2C3BCE8E18A8B19300A9EC1F /* filterproto */ = {
 			isa = PBXGroup;
 			children = (
+				2CF0D33A18BDF3BC001F1BC5 /* whitepaper.jpg */,
 				2C3BCE8F18A8B19300A9EC1F /* main.cpp */,
 				2C3BCE9118A8B19300A9EC1F /* filterproto.1 */,
 			);

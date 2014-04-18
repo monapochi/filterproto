@@ -11,6 +11,28 @@
 
 using namespace cv;
 
+/**
+ * @function Erosion
+ */
+Mat Erosion( Mat src )
+{
+    int erosion_elem = 1;
+    int erosion_type = 0;
+    int erosion_size = 1;
+    if( erosion_elem == 0 ){ erosion_type = MORPH_RECT; }
+    else if( erosion_elem == 1 ){ erosion_type = MORPH_CROSS; }
+    else if( erosion_elem == 2) { erosion_type = MORPH_ELLIPSE; }
+    
+    Mat element = getStructuringElement( erosion_type,
+                                        Size( 2*erosion_size + 1, 2*erosion_size+1 ),
+                                        Point( erosion_size, erosion_size ) );
+    /// Apply the erosion operation
+    Mat erosion_dst;
+    erode( src, erosion_dst, element );
+    //imshow( "Erosion Demo", ~erosion_dst );
+    return erosion_dst;
+}
+
 Mat sepConv(Mat input, int radius)
 {
     
@@ -40,7 +62,11 @@ Mat sepConv(Mat input, int radius)
 
 Mat getDrawingLine(Mat src)
 {
-    Mat line;
+    Mat line,blurred;
+    
+    bilateralFilter(src, blurred, 11, 40, 200);
+    bilateralFilter(blurred, src, 11, 40, 200);
+
     
     cvtColor( src, src, CV_RGB2GRAY );
     line = sepConv(src, 1) - sepConv(src, 4);
@@ -49,21 +75,19 @@ Mat getDrawingLine(Mat src)
     //threshold(line, line, 0, 255, THRESH_BINARY|THRESH_OTSU);
     
     
-    int kernel_size = 3;
-    int scale = 1;
-    int delta = 0;
-    int ddepth = CV_16S;
-    Mat abs_dst,dst;
-    Laplacian( src, dst, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
-    convertScaleAbs( dst, abs_dst );
-    abs_dst -= src;
-    line += abs_dst;
+//    int kernel_size = 3;
+//    int scale = 1;
+//    int delta = 0;
+//    int ddepth = CV_16S;
+//    Mat abs_dst,dst;
+//    Laplacian( src, dst, ddepth, kernel_size, scale, delta, BORDER_DEFAULT );
+//    convertScaleAbs( dst, abs_dst );
+//    abs_dst -= src;
+//    line += abs_dst;
     
     cvtColor( line, line, CV_GRAY2RGB );
-
     
-    
-    return line;
+    return Erosion(line);
 }
 
 
@@ -441,7 +465,8 @@ Mat dottize(Mat src, int width)
 /** @function main */
 int main( int argc, char** argv )
 {
-
+//#define CAMERA 1
+    
 #if CAMERA
     VideoCapture cap(0); // デフォルトカメラをオープン
     if(!cap.isOpened())  // 成功したかどうかをチェック
@@ -469,7 +494,7 @@ int main( int argc, char** argv )
         count++;
         if(count > 2) count = 0;
         Mat line = getDrawingLine(input_image);
-        imshow("cam", paint * 1.5 - line);
+        imshow("cam", ~line);
         if(waitKey(30) >= 0) break;
     }
 #endif
@@ -510,10 +535,31 @@ int main( int argc, char** argv )
     imshow("test", paintdots + linedots);
      */
     
-//    // 26th feb 14
-//    Mat src = imread("/Users/naoishinichirou/Downloads/sundown-paris.jpg");
-//    Mat line = getDrawingLine(src);
-//    imshow("test",line);
+    // 26,27th feb 14
+    {
+    Mat src = imread("/Users/naoishinichirou/Downloads/py_k5ii_06.jpg");
+    if (src.cols > 512) {
+        float h, w, nw, nh;
+        h = src.rows;
+        w = src.cols;
+        nw = 512;
+        nh = (h/w)*nw; // Maintain aspect ratio based on a desired width.
+        
+        resize(src, src, Size(nw,nh),INTER_AREA);
+    }
+        
+    
+
+    Mat line = getDrawingLine(src);
+    Mat texture = imread("/Users/naoishinichirou/Develop/filterproto/whitepaper.jpg");
+    Mat paper(texture,Rect(0,0,line.cols+10,line.rows+10));
+    Mat paint = filter(src, 31, 5, 2, false, true);
+    Mat part = paper(Rect(5,5,line.cols,line.rows));
+    part =  part * 0.3 + (paint) * 0.7 - filter(line, 31, 5, 2, false, true) ;
+    imshow("test2",paper);
+    }
+    
+    
     
     
     waitKey(0);
