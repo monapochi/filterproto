@@ -547,16 +547,23 @@ int main( int argc, char** argv )
         
         resize(src, src, Size(nw,nh),INTER_AREA);
     }
-        
-    
+     
+    Mat lab,aaa;
+    cvtColor(src, lab, CV_RGB2Lab); // 21th Apr
 
-    Mat line = getDrawingLine(src);
+    Mat line = getDrawingLine(lab);
     Mat texture = imread("/Users/naoishinichirou/Develop/filterproto/whitepaper.jpg");
-    Mat paper(texture,Rect(0,0,line.cols+10,line.rows+10));
-    Mat paint = filter(src, 31, 5, 2, false, true);
+        Mat texture_lib;
+        cvtColor(texture, texture_lib, CV_RGB2Lab);
+        
+    Mat paper(texture_lib,Rect(0,0,line.cols+10,line.rows+10));
+    Mat paint = filter(lab, 31, 5, 2, false, true);
     Mat part = paper(Rect(5,5,line.cols,line.rows));
     part =  part * 0.3 + (paint) * 0.7 - filter(line, 31, 5, 2, false, true) ;
-    imshow("test2",paper);
+        
+    cvtColor(paper, aaa, CV_Lab2RGB);
+
+    imshow("test2",aaa);
     }
     
     
